@@ -103,8 +103,7 @@ function Decoder:cell()
     return  nn.gModule({x, y, pos, prev_s, all_h, infmask}, {err, nn.Identity()(next_s)}):cuda()
 end
 
-function Decoder:forward(state, batch, for_dec, all_h) 
-	self.s[0][2]:copy(for_dec)
+function Decoder:forward(state, batch, all_h) 
 
 	for i = 1, (batch.maxY - 1) do
 	  err, self.s[i] = unpack(self.cells[i]:forward({batch.y[i], batch.y[i + 1], torch.ones(self.params.batch_size):cuda() * i, self.s[i - 1], all_h, batch.infmask}))
@@ -134,7 +133,7 @@ function Decoder:backward(batch, all_h)
 	end
 
 	-- we also need to return the d's that have added up for the encoder
-	return {self.ds, sum_d_all_h}
+	return sum_d_all_h
 
 end
 

@@ -23,12 +23,10 @@ function Encoder:new_cell(dim)
 end
 
 function Encoder:forward(batch)
-  local all_h = self.cell:forward(batch.x)
-  local empty_for_dec = torch.zeros(self.params.batch_size, self.emb_out):cuda()
-  return {empty_for_dec, all_h}
+  return self.cell:forward(batch.x)
 end
 
-function Encoder:backward(batch, grad, sum_d_all_h)
+function Encoder:backward(batch, sum_d_all_h)
   self.cell:backward(batch.x, sum_d_all_h)
 end
 

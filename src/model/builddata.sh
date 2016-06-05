@@ -1,3 +1,4 @@
+#!/bin/bash
 
 PYTHONPATH=~/codenn/src/
 CODENN_DIR=~/codenn/
@@ -24,9 +25,6 @@ python buildData.py csharp $MAX_CODE_LENGTH $MAX_NL_LENGTH $CSHARP_UNK_THRESHOLD
 th buildData.lua -language sql -max_code_length $MAX_CODE_LENGTH -max_nl_length $MAX_NL_LENGTH -batch_size $BATCH_SIZE
 th buildData.lua -language csharp -max_code_length $MAX_CODE_LENGTH -max_nl_length $MAX_NL_LENGTH -batch_size $BATCH_SIZE
 
-
-# Run Training for SQL
-th main.lua -bleufile $CODENN_DIR/data/stackoverflow/sql/dev/ref.txt -gpuidx 1 -rnn_size 400 -language sql
 
 
 

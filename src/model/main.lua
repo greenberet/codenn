@@ -10,13 +10,13 @@ function setup()
 end
 
 function fp(state, batch)
-	for_dec, all_h = unpack(encoder:forward(batch))
-	decoder:forward(state, batch, for_dec, all_h)
+	all_h = encoder:forward(batch)
+	decoder:forward(state, batch, all_h)
 end
 
 function bp(batch)
-	local ds, sum_d_all_h = unpack(decoder:backward(batch, all_h))
-	encoder:backward(batch, ds, sum_d_all_h)
+	local sum_d_all_h = decoder:backward(batch, all_h)
+	encoder:backward(batch, sum_d_all_h)
 end
 
 function updateParams()
@@ -40,7 +40,7 @@ function run_bleu(state)
 	print('predicting')
 	encoder:evaluate()
 	decoder:evaluate()
-	local predictions, alignments = unpack(get_predictions(state, params.max_length, params.beam_size, encoder, decoder.cells[1]))
+	local predictions, alignments = unpack(get_predictions(state, params.max_length, params.beam_size, encoder.cell, decoder.cells[1]))
 	local tmpFilename = os.tmpname()
 	local tf = io.open(tmpFilename, 'w')
 	for _, line in ipairs(predictions) do
@@ -48,7 +48,7 @@ function run_bleu(state)
 	end
 	tf:close()
 	local cmd
-	cmd = 'python ../utils/bleu.py ' .. params.bleufile .. ' < ' .. tmpFilename 
+	cmd = 'python ../utils/bleu.py ' .. params.dev_ref_file .. ' < ' .. tmpFilename 
 	print(cmd .. '\n')
 	local bleu = tonumber(os.capture(cmd))
 	print('BLEU: ' .. bleu .. '\n')
@@ -66,13 +66,13 @@ function main()
 	cmd:option('-encoder_emb', 400, 'encoder embedding size')
 	cmd:option('-decoder_emb', 400, 'decoder embedding size')
 	cmd:option('-init_weight', 0.35, 'length')
-	cmd:option('-bleufile',  'human_true.txt', 'which file to compute bleu against?')
+	cmd:option('-dev_ref_file',  'human_true.txt', 'which file to compute bleu against?')
 	cmd:option('-testfile',  'human.data', 'which test file?')
 	cmd:option('-dropout', 0.5, 'length')
 	cmd:option('-normalize', 1, 'length')
 	cmd:option('-beam_size', 10, 'Beam Size')
-	cmd:option('-model1', '', 'output')
-	cmd:option('-model2', '', 'output')
+	cmd:option('-encoder', '', 'output')
+	cmd:option('-decoder', '', 'output')
 	cmd:option('-lr', 0.5, 'Initial learning rate')
 	cmd:option('-shuffle', false, 'Shuffle batches?')
 	cmd:option('-language', 'code', 'Code language')
@@ -82,7 +82,7 @@ function main()
 
 	params =      {
 		gpu=opt.gpuidx,
-		bleufile=opt.bleufile,
+		dev_ref_file=opt.dev_ref_file,
 		layers=1,
 		rnn_size=opt.rnn_size,
 		encoder_emb=opt.encoder_emb,
@@ -118,12 +118,12 @@ function main()
 	setup()
 
 	local epoch = 0
-	if opt.model1 ~= '' then
+	if opt.encoder ~= '' and opt.decoder ~= '' then
 		print('loading model params')
-		model1_cell_params = torch.load(opt.model1).cell:getParameters()
-		model2_cell_params = torch.load(opt.model2):getParameters()
-		encoder.paramx:copy(model1_cell_params)
-		decoder.paramx:copy(model2_cell_params)
+		encoder_cell_params = torch.load(opt.encoder):getParameters()
+		decoder_cell_params = torch.load(opt.decoder):getParameters()
+		encoder.paramx:copy(encoder_cell_params)
+		decoder.paramx:copy(decoder_cell_params)
 	end
 
 	for _, state in pairs(states) do
@@ -133,7 +133,6 @@ function main()
 	local val_accs = {}
 	local bleus= {}
 	local train_accs = {}
-	local step = 0
 	local start_time = torch.tic()
 	local total_cases = 0
 	local bleus = {}
@@ -186,7 +185,6 @@ function main()
 		end
 
 		print('epoch=' .. epoch .. accs ..
-		', step=' .. step ..
 		', examples per sec.=' .. cps ..
 		', examples=' .. total_cases ..
 		', learning rate=' .. string.format("%.3f", params.learningRate) ..
@@ -210,9 +208,8 @@ end
 
 function save_models() 
 	print('saving models')
-	modelFile = "rnn" .. tostring(opt.gpuidx) .. ".model"
-	torch.save(modelFile .. '1', encoder)
-	torch.save(modelFile .. '2', decoder.cells[1])
+	torch.save(opt.language .. '.encoder', encoder.cell) -- save the whole encoder
+	torch.save(opt.language .. '.decoder', decoder.cells[1]) -- save only the decoder cell
 end
 
 main()

@@ -27,9 +27,7 @@ function get_predictions(state, ml, bs, enc, dec)
 		batch.xsizes = batch.xsizes:expand(params.batch_size)
 
 
-	  local for_dec, all_h = unpack(enc:forward(batch))
-		ps[2]:copy(for_dec[1])
-
+		local all_h = enc:forward(batch.x)
 		count = count + 1
 
 		-- now beam search on the second model
@@ -38,12 +36,12 @@ function get_predictions(state, ml, bs, enc, dec)
 
 
 		if #prediction == 0 then
-		  table.insert(predictions, {batch.ids[1], 'mysql'})
+			table.insert(predictions, {batch.ids[1], 'mysql'})
 		else
-		  table.insert(predictions, {batch.ids[1], table.concat(prediction, ' ')})
+			table.insert(predictions, {batch.ids[1], table.concat(prediction, ' ')})
 
 			table.insert(prediction, 1, "CODE_START")
-		  table.insert(prediction, "CODE_END")
+			table.insert(prediction, "CODE_END")
 
 			-- Only if alignments are present
 			if #aligns ~= 0 then
@@ -57,9 +55,9 @@ function get_predictions(state, ml, bs, enc, dec)
 
 				table.insert(alignments[batch.ids[1]], alignmentSQL)
 				for i = 1, math.min(#prediction, ml) do
-				  local al = {prediction[i]} -- add the NL word
-			   	for j = 1, batch.maxX  do -- add all the alignment scores
-					  table.insert(al, aligns[i][1][j])
+					local al = {prediction[i]} -- add the NL word
+					for j = 1, batch.maxX  do -- add all the alignment scores
+						table.insert(al, aligns[i][1][j])
 					end
 					table.insert(alignments[batch.ids[1]], al) -- insert alignment scores into return value
 				end
@@ -85,7 +83,7 @@ function beam(prevs, all_h, infmask, max_length, beam_size, dec)
 	alignments={},
 	strmap = {},
 	pos=1,
-  }
+}
 
 local beams = {[1]=default_beam}
 
@@ -139,8 +137,8 @@ while cnt < max_length do
 					x=torch.ones(1):cuda() * ind,
 					prevs=next_s,
 					alignments={},
-				  strmap=next_map,
-				  pos=beams[i].pos + 1}
+					strmap=next_map,
+					pos=beams[i].pos + 1}
 
 					-- Only executed if SoftMax layer corresponding to attention
 					-- mechanism is present
@@ -174,8 +172,8 @@ while cnt < max_length do
 	cnt = cnt + 1
 end
 
-  if #beams == 0 then table.insert(beams, default_beam) end -- If there is nothing in the beam, put back default
-  return {beams[1].str, beams[1].alignments}
+if #beams == 0 then table.insert(beams, default_beam) end -- If there is nothing in the beam, put back default
+return {beams[1].str, beams[1].alignments}
 end
 
 function beam_compare(a, b)
@@ -188,82 +186,68 @@ end
 function main()
 	local cmd = torch.CmdLine()
 	cmd:option('-gpuidx', 1, 'Index of GPU on which job should be executed.')
-	cmd:option('-model1',  'None', 'Previously trained model')
-	cmd:option('-model2',  'None', 'Previously trained model')
+	cmd:option('-encoder',  'None', 'Previously trained encoder')
+	cmd:option('-decoder',  'None', 'Previously trained decoder')
 	cmd:option('-testfile',  'None', 'Previously trained model')
 	cmd:option('-beamsize',  10, 'beam size?')
-  cmd:option('-working_dir', './', 'output')
+	cmd:option('-language', 'code', 'Code language')
+	cmd:option('-rnn_size', 400, 'Dimension')
+	local working_dir = os.getenv("CODENN_WORK")
 
 	cmd:text()
 	opt = cmd:parse(arg)
 
 	params =      {
-		reverse=false,
 		max_length=20,
 		beam_size=opt.beamsize,
 		layers=1,
-		length=false,
 		max_code_length=100,
-		max_nl=100,
+		max_nl_length=100,
 		batch_size=100,
-		minibatches=1,
-		useAttention=true,
-		alignments=opt.alignments}
+		alignments=opt.alignments,
+	  rnn_size=opt.rnn_size}
 
 		print(params)
 
-
 		init_gpu(opt.gpuidx)
 
-	vocab = torch.load(opt.working_dir .. 'vocab.data')
-  state_test = torch.load(opt.working_dir .. opt.testfile)
+	  vocab = torch.load(working_dir .. '/vocab.data.' .. opt.language)
+	  state_test = torch.load(working_dir .. '/eval.data.' .. opt.language)
+		encoderCell = torch.load(opt.encoder)
+		decoderCell= torch.load(opt.decoder)
 
-	for _, batch in pairs(state_test.batches) do
-		batch.x = batch.x:cuda()
-		batch.y = batch.y:cuda()
-		batch.fmask = batch.fmask:cuda()
-		batch.xsizes = batch.xsizes:cuda()
-		batch.infmask = batch.fmask:clone():add(-1):mul(1000000000)
+
+		print('predicting')
+
+		g_disable_dropout(encoderCell)
+		g_disable_dropout(decoderCell)
+		local predictions, alignments  = unpack(get_predictions(state_test, params.max_length, params.beam_size, encoderCell, decoderCell))
+
+		local tmpFilename = os.tmpname()
+		local tf = io.open(tmpFilename, 'w')
+		for id, aligns in pairs(alignments) do
+			tf:write(id.. '\n')
+			for _, line in pairs(aligns) do
+				tf:write(table.concat(line, "|||||") .. '\n')
+			end
+		end
+		tf:close()
+		print('Alignments in  ' .. tmpFilename)
+
+		local tmpFilename = os.tmpname()
+		local tf = io.open(tmpFilename, 'w')
+		for _, line in ipairs(predictions) do
+			tf:write(line[1] .. '\t' .. line[2]  .. '\n')
+		end
+		tf:close()
+		print('Predictions in  ' .. tmpFilename)
+
+
 	end
 
 
-
-	encoder = torch.load(opt.model1)
-	decoderCell= torch.load(opt.model2)
-	params.rnn_size = encoder.params.rnn_size
-
-
-	print('predicting')
-
-  encoder:evaluate()
-  g_disable_dropout(decoderCell)
-  local predictions, alignments  = unpack(get_predictions(state_test, params.max_length, params.beam_size, encoder, decoderCell))
-
-  local tmpFilename = os.tmpname()
-  local tf = io.open(tmpFilename, 'w')
-  for id, aligns in pairs(alignments) do
-    tf:write(id.. '\n')
-    for _, line in pairs(aligns) do
-      tf:write(table.concat(line, "|||||") .. '\n')
-	  end
-  end
-  tf:close()
-  print('Alignments in  ' .. tmpFilename)
-
-  local tmpFilename = os.tmpname()
-  local tf = io.open(tmpFilename, 'w')
-  for _, line in ipairs(predictions) do
-    tf:write(line[1] .. '\t' .. line[2]  .. '\n')
-  end
-  tf:close()
-  print('Predictions in  ' .. tmpFilename)
-
-
-end
-
-
-if script_path() == "predict.lua" then
-  include "layers/MaskedLoss.lua"
-  require('encoder')
-	main()
-end
+	if script_path() == "predict.lua" then
+		include "MaskedLoss.lua"
+		require('encoder')
+		main()
+	end
