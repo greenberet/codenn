@@ -19,6 +19,7 @@ Setup environment
 Build both csharp and sql datasets
 
 > cd src/model
+
 > ./buildData.sh
 
 Train codenn models and predict on test set
