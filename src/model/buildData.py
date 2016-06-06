@@ -2,7 +2,6 @@ from sql.SqlTemplate import SqlTemplate
 from csharp.CSharpTemplate import parseCSharp
 import re
 import collections
-import ipdb
 import random
 import json
 import sys
