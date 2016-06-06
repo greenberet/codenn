@@ -124,7 +124,7 @@ if __name__ == '__main__':
 
 
   vocab = buildVocab(os.environ['CODENN_DIR'] + '/data/stackoverflow/' + lang + '/train.txt', code_unk_threshold, nl_unk_threshold, lang)
-  get_data('/home/sviyer/codenn/data/stackoverflow/' + lang + '/train.txt', vocab, False, max_code_len, max_nl_len)
-  get_data('/home/sviyer/codenn/data/stackoverflow/' + lang + '/valid.txt', vocab, False, max_code_len, max_nl_len)
-  get_data('/home/sviyer/codenn/data/stackoverflow/' + lang + '/dev/dev.txt', vocab, True, max_code_len, max_nl_len)
-  get_data('/home/sviyer/codenn/data/stackoverflow/' + lang + '/eval/eval.txt', vocab, True, max_code_len, max_nl_len)
+  get_data(os.environ['CODENN_DIR'] + '/data/stackoverflow/' + lang + '/train.txt', vocab, False, max_code_len, max_nl_len)
+  get_data(os.environ['CODENN_DIR'] + '/data/stackoverflow/' + lang + '/valid.txt', vocab, False, max_code_len, max_nl_len)
+  get_data(os.environ['CODENN_DIR'] + '/data/stackoverflow/' + lang + '/dev/dev.txt', vocab, True, max_code_len, max_nl_len)
+  get_data(os.environ['CODENN_DIR'] + '/data/stackoverflow/' + lang + '/eval/eval.txt', vocab, True, max_code_len, max_nl_len)
